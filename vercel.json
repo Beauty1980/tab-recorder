@@ -1,6 +1,3 @@
 {
-  "buildCommand": "pnpm --filter @workspace/audio-recorder run build",
-  "outputDirectory": "artifacts/audio-recorder/dist/public",
-  "installCommand": "pnpm install",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }

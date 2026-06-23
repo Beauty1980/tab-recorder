@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Audio Capture</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    @keyframes ping  { 75%,100% { transform: scale(2); opacity: 0; } }
+    @keyframes pulse { 0%,100%  { opacity: 1; } 50% { opacity: .5; } }
+    @keyframes spin  { to { transform: rotate(360deg); } }
+    .anim-ping  { animation: ping  1s cubic-bezier(0,0,.2,1) infinite; }
+    .anim-pulse { animation: pulse 2s cubic-bezier(.4,0,.6,1) infinite; }
+    .anim-spin  { animation: spin  1s linear infinite; }
+    audio { width: 100%; }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-900">
+<div class="flex flex-col items-center px-4 py-10 sm:py-14" style="max-width:32rem;margin:0 auto">
+
+  <!-- API Key -->
+  <div class="w-full mb-6">
+    <label for="apiKey" class="flex items-center gap-1.5 text-sm font-medium text-slate-500 mb-2">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
+      OpenAI API Key
+    </label>
+    <div class="relative">
+      <input id="apiKey" type="password" placeholder="Enter your OpenAI API key"
+        class="w-full pr-16 pl-3 py-2.5 rounded-lg border border-slate-200 font-mono text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
+      <button id="toggleKey" onclick="toggleKey()"
+        class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-700 transition-colors select-none">Show</button>
+    </div>
+    <p class="text-xs text-slate-400 mt-1.5">Your key is used only in this session and never stored on the server.</p>
+  </div>
+
+  <!-- Recorder Card -->
+  <div class="w-full bg-white rounded-2xl shadow-lg border border-slate-100 px-8 py-8">
+    <h1 class="text-2xl font-semibold text-center text-slate-900 mb-1">Audio Capture</h1>
+    <p class="text-sm text-slate-400 text-center mb-8">Record audio directly from your browser tab.</p>
+
+    <!-- Status indicator -->
+    <div class="flex flex-col items-center justify-center h-24 mb-2">
+
+      <div id="statusIdle" class="flex flex-col items-center text-slate-400">
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mb-2 opacity-50"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+        <p class="text-sm font-medium">Ready to record</p>
+      </div>
+
+      <div id="statusRecording" class="hidden flex-col items-center">
+        <div class="relative flex items-center justify-center mb-2">
+          <div class="absolute w-12 h-12 bg-red-500/20 rounded-full anim-ping"></div>
+          <div class="absolute w-8  h-8  bg-red-500/40 rounded-full anim-pulse"></div>
+          <div class="relative w-4  h-4  bg-red-500   rounded-full"></div>
+        </div>
+        <p class="text-sm font-medium text-red-500 anim-pulse">Recording</p>
+        <p id="timerDisplay" class="text-3xl font-mono font-semibold text-slate-900 mt-2 tracking-wider">0:00</p>
+      </div>
+
+      <div id="statusDone" class="hidden flex-col items-center text-indigo-600">
+        <div class="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center mb-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+        </div>
+        <p class="text-sm font-medium text-slate-900">Recording saved</p>
+        <p id="finalDuration" class="text-lg font-mono text-slate-400 mt-1">0:00</p>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="flex flex-col items-center gap-4 mt-4">
+
+      <button id="startBtn" onclick="startRecording()"
+        class="w-full max-w-xs flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-base font-medium rounded-full h-14 shadow-sm hover:shadow transition-all">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+        Start Recording
+      </button>
+
+      <button id="stopBtn" onclick="stopRecording()" style="display:none"
+        class="w-full max-w-xs flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white text-base font-medium rounded-full h-14 shadow-sm hover:shadow transition-all">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
+        Stop Recording
+      </button>
+
+      <div id="postRecordingControls" style="display:none" class="w-full flex flex-col items-center gap-4">
+        <audio id="audioPlayer" controls class="w-full h-12 rounded-lg"></audio>
+        <div class="flex w-full gap-3">
+          <button onclick="resetRecorder()"
+            class="flex-1 flex items-center justify-center gap-2 h-12 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-sm font-medium transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+            Record Again
+          </button>
+          <a id="downloadBtn" download="recording.webm"
+            class="flex-1 flex items-center justify-center gap-2 h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition-colors cursor-pointer">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+            Download
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Error -->
+    <div id="recorderError" style="display:none" class="mt-6 flex gap-3 items-start bg-red-50 border border-red-200 text-red-800 rounded-xl px-4 py-3">
+      <svg class="shrink-0 mt-0.5" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+      <div><p class="text-sm font-semibold">Error</p><p id="recorderErrorMsg" class="text-sm mt-0.5"></p></div>
+    </div>
+  </div>
+
+  <!-- Transcription Section -->
+  <div id="transcriptionSection" style="display:none" class="w-full mt-6">
+    <div class="flex items-center gap-2 mb-3">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4F46E5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+      <h2 class="text-sm font-semibold text-slate-900">Транскрипция</h2>
+    </div>
+
+    <div id="transcribingSpinner" style="display:none" class="flex items-center gap-3 px-4 py-4 rounded-xl border border-slate-200 bg-white text-slate-400 text-sm">
+      <svg class="anim-spin shrink-0" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+      Отправка в Whisper...
+    </div>
+
+    <div id="transcriptionError" style="display:none" class="flex gap-3 items-start bg-red-50 border border-red-200 text-red-800 rounded-xl px-4 py-3">
+      <svg class="shrink-0 mt-0.5" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+      <div><p class="text-sm font-semibold">Ошибка транскрипции</p><p id="transcriptionErrorMsg" class="text-sm mt-0.5"></p></div>
+    </div>
+
+    <div id="transcriptionText" style="display:none" class="px-4 py-4 rounded-xl border border-slate-200 bg-white text-slate-800 text-sm leading-relaxed whitespace-pre-wrap"></div>
+  </div>
+
+  <!-- Study Notes Section -->
+  <div id="studyNotesSection" style="display:none" class="w-full mt-6 mb-16">
+    <div class="flex items-center gap-2 mb-3">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4F46E5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+      <h2 class="text-sm font-semibold text-slate-900">Учебный конспект</h2>
+    </div>
+
+    <div id="notesSpinner" style="display:none" class="flex items-center gap-3 px-4 py-4 rounded-xl border border-slate-200 bg-white text-slate-400 text-sm">
+      <svg class="anim-spin shrink-0" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+      GPT-4o создаёт конспект...
+    </div>
+
+    <div id="notesError" style="display:none" class="flex gap-3 items-start bg-red-50 border border-red-200 text-red-800 rounded-xl px-4 py-3">
+      <svg class="shrink-0 mt-0.5" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+      <div><p class="text-sm font-semibold">Ошибка создания конспекта</p><p id="notesErrorMsg" class="text-sm mt-0.5"></p></div>
+    </div>
+
+    <div id="notesContent" style="display:none" class="rounded-xl border border-slate-200 bg-white overflow-hidden"></div>
+  </div>
+
+</div>
+
+<script>
+  // ── State ────────────────────────────────────────────────────────────────
+  let recState = 'idle'; // idle | recording | done
+  let elapsed  = 0;
+  let timer    = null;
+  let recorder = null;
+  let chunks   = [];
+  let captureStream = null;
+  let blobUrl  = null;
+
+  // ── API Key ──────────────────────────────────────────────────────────────
+  const apiKeyInput = document.getElementById('apiKey');
+  apiKeyInput.value = sessionStorage.getItem('oai_key') || '';
+  apiKeyInput.addEventListener('input', () => {
+    sessionStorage.setItem('oai_key', apiKeyInput.value);
+  });
+
+  function toggleKey() {
+    const btn = document.getElementById('toggleKey');
+    if (apiKeyInput.type === 'password') {
+      apiKeyInput.type = 'text';
+      btn.textContent = 'Hide';
+    } else {
+      apiKeyInput.type = 'password';
+      btn.textContent = 'Show';
+    }
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  function fmt(s) {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+    return `${m}:${String(sec).padStart(2,'0')}`;
+  }
+
+  function show(id)  { document.getElementById(id).style.display = ''; }
+  function hide(id)  { document.getElementById(id).style.display = 'none'; }
+  function flex(id)  { document.getElementById(id).style.display = 'flex'; }
+  function text(id, v) { document.getElementById(id).textContent = v; }
+
+  function showError(msg) {
+    text('recorderErrorMsg', msg);
+    show('recorderError');
+  }
+  function hideError() { hide('recorderError'); }
+
+  // ── State transitions ────────────────────────────────────────────────────
+  function setIdle() {
+    recState = 'idle'; elapsed = 0;
+    flex('statusIdle');      hide('statusRecording'); hide('statusDone');
+    show('startBtn');        hide('stopBtn');         hide('postRecordingControls');
+    text('timerDisplay', '0:00');
+  }
+
+  function setRecording() {
+    recState = 'recording';
+    hide('statusIdle');      flex('statusRecording'); hide('statusDone');
+    hide('startBtn');        show('stopBtn');          hide('postRecordingControls');
+    hideError();
+    elapsed = 0;
+    text('timerDisplay', '0:00');
+    timer = setInterval(() => {
+      elapsed++;
+      text('timerDisplay', fmt(elapsed));
+    }, 1000);
+  }
+
+  function setDone(url) {
+    recState = 'done'; blobUrl = url;
+    if (timer) { clearInterval(timer); timer = null; }
+    hide('statusIdle');      hide('statusRecording'); flex('statusDone');
+    hide('startBtn');        hide('stopBtn');         show('postRecordingControls');
+    text('finalDuration', fmt(elapsed));
+    document.getElementById('audioPlayer').src = url;
+    document.getElementById('downloadBtn').href = url;
+  }
+
+  // ── Recording ────────────────────────────────────────────────────────────
+  async function startRecording() {
+    hideError();
+    hide('transcriptionSection');
+    hide('studyNotesSection');
+    chunks = [];
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+      return showError('Your browser does not support tab audio capture.');
+    }
+
+    try {
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getDisplayMedia({ video: false, audio: true });
+      } catch {
+        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      }
+
+      if (stream.getAudioTracks().length === 0) {
+        stream.getTracks().forEach(t => t.stop());
+        return showError("No audio track selected. Share a tab and check 'Share audio'.");
+      }
+
+      captureStream = stream;
+      const audioStream = new MediaStream(stream.getAudioTracks());
+      recorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm' });
+
+      recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const url  = URL.createObjectURL(blob);
+        setDone(url);
+        stopTracks();
+        transcribe(blob);
+      };
+
+      stream.getTracks().forEach(t => {
+        t.onended = () => { if (recorder && recorder.state === 'recording') stopRecording(); };
+      });
+
+      recorder.start();
+      setRecording();
+    } catch (err) {
+      if (err.name === 'NotAllowedError' || (err.message || '').includes('Permission denied')) {
+        showError("Permission denied. Please try again and select 'Share audio'.");
+      } else {
+        showError(err.message || 'Could not start recording.');
+      }
+    }
+  }
+
+  function stopRecording() {
+    if (recorder && recorder.state === 'recording') recorder.stop();
+  }
+
+  function stopTracks() {
+    if (captureStream) { captureStream.getTracks().forEach(t => t.stop()); captureStream = null; }
+  }
+
+  function resetRecorder() {
+    stopTracks();
+    if (timer) { clearInterval(timer); timer = null; }
+    hide('transcriptionSection');
+    hide('studyNotesSection');
+    setIdle();
+    hideError();
+    if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
+  }
+
+  // ── Transcription ────────────────────────────────────────────────────────
+  async function transcribe(blob) {
+    const key = (apiKeyInput.value || '').trim();
+
+    show('transcriptionSection');
+    flex('transcribingSpinner');
+    hide('transcriptionError');
+    hide('transcriptionText');
+
+    if (!key) {
+      hide('transcribingSpinner');
+      show('transcriptionError');
+      text('transcriptionErrorMsg', 'Enter your OpenAI API key to enable transcription.');
+      return;
+    }
+
+    try {
+      const form = new FormData();
+      form.append('file', blob, 'recording.webm');
+      form.append('model', 'whisper-1');
+
+      const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${key}` },
+        body: form,
+      });
+
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({}));
+        throw new Error(b?.error?.message || `API error ${res.status}`);
+      }
+
+      const data = await res.json();
+      const t = data.text || '';
+      hide('transcribingSpinner');
+      show('transcriptionText');
+
+      if (!t.trim()) {
+        document.getElementById('transcriptionText').innerHTML =
+          '<em class="text-slate-400">Речь не обнаружена.</em>';
+      } else {
+        text('transcriptionText', t);
+        generateNotes(t);
+      }
+    } catch (err) {
+      hide('transcribingSpinner');
+      show('transcriptionError');
+      text('transcriptionErrorMsg', err.message || 'Transcription failed.');
+    }
+  }
+
+  // ── Study Notes ──────────────────────────────────────────────────────────
+  async function generateNotes(transcript) {
+    const key = (apiKeyInput.value || '').trim();
+    if (!key) return;
+
+    show('studyNotesSection');
+    flex('notesSpinner');
+    hide('notesError');
+    hide('notesContent');
+
+    try {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          response_format: { type: 'json_object' },
+          messages: [
+            {
+              role: 'system',
+              content: `Ты — эксперт по созданию исчерпывающих учебных конспектов. Твоя цель — создать конспект настолько подробный, чтобы студент мог полностью восстановить содержание лекции, не слушая её повторно.
+
+На основе транскрипции лекции создай детальный конспект на русском языке и верни его строго в виде JSON-объекта со следующей структурой:
+{
+  "title": "точное название темы лекции",
+  "overview": "общий обзор лекции в 3-5 предложениях",
+  "sections": [
+    {
+      "heading": "название раздела",
+      "content": "подробное объяснение — не пропускай деталей, минимум 3-5 предложений",
+      "examples": ["описание примера 1"],
+      "steps": ["шаг 1 с объяснением"]
+    }
+  ],
+  "terms": [{"term": "термин", "definition": "полное определение с контекстом"}],
+  "key_takeaways": ["вывод 1 — полное предложение"]
+}
+
+Правила: отдельный раздел для каждой темы; "content" максимально подробный; "examples" и "steps" только если упоминались; все термины в "terms"; всё на русском языке.`,
+            },
+            { role: 'user', content: `Транскрипция:\n\n${transcript}` },
+          ],
+        }),
+      });
+
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({}));
+        throw new Error(b?.error?.message || `API error ${res.status}`);
+      }
+
+      const data = await res.json();
+      const notes = JSON.parse(data.choices[0].message.content);
+      hide('notesSpinner');
+      renderNotes(notes);
+    } catch (err) {
+      hide('notesSpinner');
+      show('notesError');
+      text('notesErrorMsg', err.message || 'Не удалось создать конспект.');
+    }
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function renderNotes(n) {
+    const el = document.getElementById('notesContent');
+
+    // SVG icons
+    const layersIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4F46E5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>`;
+    const chevronIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4F46E5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>`;
+    const tagIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4F46E5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg>`;
+    const listIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4F46E5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg>`;
+
+    let html = '';
+
+    // Title
+    html += `<div class="px-5 py-4 border-b bg-indigo-50/60"><h3 class="text-base font-semibold text-slate-900">${esc(n.title || '')}</h3></div>`;
+
+    // Overview
+    if (n.overview) {
+      html += `<div class="px-5 py-4 border-b bg-slate-50/60"><p class="text-sm text-slate-700 leading-relaxed">${esc(n.overview)}</p></div>`;
+    }
+
+    // Sections
+    if (n.sections && n.sections.length) {
+      html += `<div class="divide-y divide-slate-100">`;
+      for (const sec of n.sections) {
+        html += `<div class="px-5 py-4">`;
+        html += `<div class="flex items-center gap-2 mb-2">${layersIcon}<h4 class="text-sm font-semibold text-slate-900">${esc(sec.heading || '')}</h4></div>`;
+        html += `<p class="text-sm text-slate-700 leading-relaxed mb-3">${esc(sec.content || '')}</p>`;
+
+        if (sec.steps && sec.steps.length) {
+          html += `<p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Шаги / процесс</p><ol class="space-y-1.5 mb-3">`;
+          sec.steps.forEach((s, i) => {
+            html += `<li class="flex items-start gap-2 text-sm text-slate-700"><span class="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-50 text-indigo-600 text-xs font-bold flex items-center justify-center mt-0.5">${i+1}</span>${esc(s)}</li>`;
+          });
+          html += `</ol>`;
+        }
+
+        if (sec.examples && sec.examples.length) {
+          html += `<div class="rounded-lg bg-slate-50 px-3 py-2.5"><p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Примеры</p><ul class="space-y-1.5">`;
+          for (const ex of sec.examples) {
+            html += `<li class="flex items-start gap-2 text-sm text-slate-700"><span class="shrink-0 mt-0.5">${chevronIcon}</span>${esc(ex)}</li>`;
+          }
+          html += `</ul></div>`;
+        }
+        html += `</div>`;
+      }
+      html += `</div>`;
+    }
+
+    // Terms
+    if (n.terms && n.terms.length) {
+      html += `<div class="px-5 py-4 border-t border-slate-100"><div class="flex items-center gap-2 mb-3">${tagIcon}<h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Важные термины</h4></div><dl class="space-y-3">`;
+      for (const t of n.terms) {
+        html += `<div class="rounded-lg border border-slate-100 px-3 py-2.5"><dt class="text-sm font-semibold text-slate-900">${esc(t.term)}</dt><dd class="text-sm text-slate-500 mt-1 leading-relaxed">${esc(t.definition)}</dd></div>`;
+      }
+      html += `</dl></div>`;
+    }
+
+    // Key takeaways
+    if (n.key_takeaways && n.key_takeaways.length) {
+      html += `<div class="px-5 py-4 border-t border-slate-100 bg-indigo-50/40"><div class="flex items-center gap-2 mb-3">${listIcon}<h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Главные выводы</h4></div><ul class="space-y-2">`;
+      for (const pt of n.key_takeaways) {
+        html += `<li class="flex items-start gap-2 text-sm text-slate-700"><span class="mt-2 w-1.5 h-1.5 rounded-full bg-indigo-600 shrink-0"></span>${esc(pt)}</li>`;
+      }
+      html += `</ul></div>`;
+    }
+
+    el.innerHTML = html;
+    show('notesContent');
+  }
+</script>
+</body>
+</html>
